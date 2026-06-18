@@ -1,0 +1,273 @@
+substitutions:
+  device_name: "systasolar-aqua-s3"
+  device_friendly_name: "SystaSolar Aqua S3"
+  solar_flow_l_min: "2.5"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${device_friendly_name}
+
+esp32:
+  board: lolin_s3_mini
+  variant: esp32s3
+  framework:
+    type: arduino
+
+logger:
+  level: WARN
+  baud_rate: 0
+
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 5min
+  ap:
+    ssid: ${device_friendly_name}-AP
+    password: !secret ap_password
+
+captive_portal:
+
+# Pins prüfen! Für ESP32-S3 Hardware-UART verwenden.
+# Falls der Adapter GPIO13 direkt auf den Steckplatz legt, rx_pin auf GPIO13 ändern.
+uart:
+  id: uart_bus
+  tx_pin: GPIO17
+  rx_pin: GPIO16
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+  debug:
+    direction: RX
+    dummy_receiver: true
+    after:
+      timeout: 30ms
+    sequence:
+      - lambda: |-
+          if (bytes.size() < 39) return;
+
+          auto validate_checksum = [](const std::vector<uint8_t>& frame) -> bool {
+            uint8_t sum = 0;
+            for (size_t j = 0; j < frame.size() - 1; j++) sum += frame[j];
+            return frame.back() == (uint8_t)(0 - sum);
+          };
+
+          auto read_i16 = [&](int i) -> int16_t {
+            return (int16_t)(((uint16_t) bytes[i] << 8) | bytes[i + 1]);
+          };
+
+          auto read_u32 = [&](int i) -> uint32_t {
+            return ((uint32_t) bytes[i] << 24) |
+                   ((uint32_t) bytes[i + 1] << 16) |
+                   ((uint32_t) bytes[i + 2] << 8) |
+                   bytes[i + 3];
+          };
+
+          auto bcd2dec = [](uint8_t v) -> uint8_t {
+            return ((v >> 4) * 10) + (v & 0x0F);
+          };
+
+          if (!(bytes[0] == 0xFC && bytes[1] == 0x24 && bytes[2] == 0x0B && bytes[3] == 0x01)) return;
+
+          std::vector<uint8_t> frame(bytes.begin(), bytes.begin() + 39);
+          if (!validate_checksum(frame)) {
+            ESP_LOGW("systabus", "FC24 checksum invalid");
+            return;
+          }
+
+          float tsa = read_i16(4) / 10.0;
+          float tse = read_i16(6) / 10.0;
+          float twu = read_i16(8) / 10.0;
+          float tw2 = read_i16(10) / 10.0;
+          uint8_t pso = bytes[12];
+          uint8_t ulv = bytes[13];
+          uint8_t status_solar = bytes[14];
+          uint8_t stoercode = bytes[15];
+          uint8_t frostschutz = bytes[16];
+          uint8_t ctr = bytes[17];
+          uint8_t stunde = bcd2dec(bytes[18]);
+          uint8_t minute = bcd2dec(bytes[19]);
+          uint8_t tag = bcd2dec(bytes[20]);
+          uint8_t monat = bcd2dec(bytes[21]);
+          uint32_t tagesenergie = read_u32(24);
+          uint32_t gesamtenergie = read_u32(28);
+
+          float delta_t = tsa - tse;
+          float solar_leistung = 0.0;
+          if (pso > 0 && delta_t > 0.0) solar_leistung = ${solar_flow_l_min} * delta_t * 69.78;
+
+          std::string status_text;
+          switch (status_solar) {
+            case 0: status_text = "Maximale Speichertemperatur erreicht"; break;
+            case 1: status_text = "Stillstand, Dampf im Kollektor"; break;
+            case 2: status_text = "Frostschutzfunktion aktiv"; break;
+            case 3: status_text = "Solare Waerme einspeisen"; break;
+            case 4: status_text = "Anschiebefunktion aktiv"; break;
+            case 5: status_text = "Einschaltverzoegerung"; break;
+            case 6: status_text = "Betriebsart Hand/Test/Aus"; break;
+            case 7: status_text = "Stoerabschaltung"; break;
+            case 8: status_text = "Kollektortemperatur zu niedrig"; break;
+            default: { char buf[32]; snprintf(buf, sizeof(buf), "Unbekannt %u", status_solar); status_text = buf; }
+          }
+
+          char zeit_buf[24];
+          snprintf(zeit_buf, sizeof(zeit_buf), "%02u:%02u %02u.%02u", stunde, minute, tag, monat);
+
+          std::string raw_hex;
+          for (auto b : frame) { char buf[4]; snprintf(buf, sizeof(buf), "%02X ", b); raw_hex += buf; }
+
+          static float last_tsa = NAN, last_tse = NAN, last_twu = NAN, last_tw2 = NAN, last_power = NAN;
+          static uint8_t last_pso = 255, last_ulv = 255, last_status = 255, last_stoer = 255, last_frost = 255, last_ctr = 255;
+          static uint32_t last_tag = 0xFFFFFFFF, last_gesamt = 0xFFFFFFFF;
+          static std::string last_zeit = "", last_status_text = "", last_raw = "";
+
+          if (isnan(last_tsa) || fabs(tsa - last_tsa) >= 0.1) { id(kollektor_temp_sensor).publish_state(tsa); last_tsa = tsa; }
+          if (isnan(last_tse) || fabs(tse - last_tse) >= 0.1) { id(eintritt_temp_sensor).publish_state(tse); last_tse = tse; }
+          if (isnan(last_twu) || fabs(twu - last_twu) >= 0.1) { id(speicher_unten_sensor).publish_state(twu); last_twu = twu; }
+          if (tw2 > -20.0 && tw2 < 160.0 && (isnan(last_tw2) || fabs(tw2 - last_tw2) >= 0.1)) { id(speicher_2_sensor).publish_state(tw2); last_tw2 = tw2; }
+          if (isnan(last_power) || fabs(solar_leistung - last_power) >= 10.0) { id(solar_leistung_sensor).publish_state(solar_leistung); last_power = solar_leistung; }
+          if (pso != last_pso) { id(solarpumpe_sensor).publish_state(pso); last_pso = pso; }
+          if (ulv != last_ulv) { id(umlenkventil_sensor).publish_state(ulv); last_ulv = ulv; }
+          if (status_solar != last_status) { id(status_solar_sensor).publish_state(status_solar); last_status = status_solar; }
+          if (stoercode != last_stoer) { id(stoercode_sensor).publish_state(stoercode); last_stoer = stoercode; }
+          if (frostschutz != last_frost) { id(frostschutz_sensor).publish_state(frostschutz); last_frost = frostschutz; }
+          if (ctr != last_ctr) { id(ctr_sensor).publish_state(ctr); last_ctr = ctr; }
+          if (tagesenergie != last_tag) { id(tagesertrag_sensor).publish_state(tagesenergie); last_tag = tagesenergie; }
+          if (gesamtenergie != last_gesamt) { id(gesamtertrag_sensor).publish_state(gesamtenergie); last_gesamt = gesamtenergie; }
+          if (status_text != last_status_text) { id(status_text_sensor).publish_state(status_text); last_status_text = status_text; }
+          if (std::string(zeit_buf) != last_zeit) { id(regler_zeit_sensor).publish_state(zeit_buf); last_zeit = zeit_buf; }
+          if (raw_hex != last_raw) { id(raw_frame_hex).publish_state(raw_hex); last_raw = raw_hex; }
+
+sensor:
+  - platform: template
+    name: "Kollektor Temp"
+    id: kollektor_temp_sensor
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+  - platform: template
+    name: "Eintritt Temp"
+    id: eintritt_temp_sensor
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+  - platform: template
+    name: "Speicher Unten"
+    id: speicher_unten_sensor
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+  - platform: template
+    name: "Speicher 2 Temp"
+    id: speicher_2_sensor
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    device_class: temperature
+    state_class: measurement
+  - platform: template
+    name: "Solar Leistung"
+    id: solar_leistung_sensor
+    unit_of_measurement: "W"
+    accuracy_decimals: 0
+    device_class: power
+    state_class: measurement
+  - platform: template
+    name: "Solarpumpe PSO"
+    id: solarpumpe_sensor
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    state_class: measurement
+  - platform: template
+    name: "Umlenkventil ULV"
+    id: umlenkventil_sensor
+    accuracy_decimals: 0
+  - platform: template
+    name: "Status Solar Code"
+    id: status_solar_sensor
+    accuracy_decimals: 0
+  - platform: template
+    name: "Stoercode Solar"
+    id: stoercode_sensor
+    accuracy_decimals: 0
+  - platform: template
+    name: "Frostschutz"
+    id: frostschutz_sensor
+    accuracy_decimals: 0
+  - platform: template
+    name: "Ctr"
+    id: ctr_sensor
+    accuracy_decimals: 0
+  - platform: template
+    name: "Tagesertrag"
+    id: tagesertrag_sensor
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 0
+    device_class: energy
+    state_class: total_increasing
+  - platform: template
+    name: "Gesamtertrag"
+    id: gesamtertrag_sensor
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 0
+    device_class: energy
+    state_class: total
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 300s
+    unit_of_measurement: "dBm"
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Adresse"
+    ssid:
+      name: "WLAN"
+  - platform: version
+    name: "ESPHome Version"
+    hide_timestamp: true
+  - platform: template
+    name: "Status Solar"
+    id: status_text_sensor
+  - platform: template
+    name: "Regler Zeit"
+    id: regler_zeit_sensor
+  - platform: template
+    name: "SystaBus Raw"
+    id: raw_frame_hex
+
+button:
+  - platform: restart
+    name: "Neustart"
+  - platform: template
+    name: "Solar Auto setzen"
+    icon: "mdi:white-balance-sunny"
+    on_press:
+      - uart.write:
+          id: uart_bus
+          data: [0x0A,0x53,0x1D,0x0B,0x11,0x53,0x45,0x54,0x00,0x01,0x00,0x00,0x00,0x00,0x0F,0x5B,0x46,0x40,0x00,0x36,0xB0,0xA0,0x00,0x03,0x02,0xA0,0x02,0x62,0x00,0x02,0xBC,0x01,0xF4,0x00,0x32,0x00,0x32,0x00,0x30,0x0B,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x2D,0x0D,0x81,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0xC1,0xC1,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x10,0x20,0x06,0x37,0x0F,0x00,0x00,0xCB]
+  - platform: template
+    name: "Solar Aus setzen"
+    icon: "mdi:power"
+    on_press:
+      - uart.write:
+          id: uart_bus
+          data: [0x0A,0x53,0x1D,0x0B,0x11,0x53,0x45,0x54,0x01,0x01,0x00,0x00,0x00,0x00,0x0F,0x5B,0x46,0x40,0x00,0x36,0xB0,0xA0,0x00,0x03,0x02,0xA0,0x02,0x62,0x00,0x02,0xBC,0x01,0xF4,0x00,0x32,0x00,0x32,0x00,0x30,0x0B,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x2D,0x0D,0x81,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0xC1,0xC1,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x10,0x20,0x06,0x37,0x0F,0x00,0x00,0xCA]
+  - platform: template
+    name: "Solar Hand setzen"
+    icon: "mdi:hand-back-right"
+    on_press:
+      - uart.write:
+          id: uart_bus
+          data: [0x0A,0x53,0x1D,0x0B,0x11,0x53,0x45,0x54,0x03,0x01,0x00,0x00,0x00,0x00,0x0F,0x5B,0x46,0x40,0x00,0x36,0xB0,0xA0,0x00,0x03,0x02,0xA0,0x02,0x62,0x00,0x02,0xBC,0x01,0xF4,0x00,0x32,0x00,0x32,0x00,0x30,0x0B,0x00,0x00,0x00,0x00,0x00,0x00,0x08,0x2D,0x0D,0x81,0x00,0x00,0x00,0x01,0x00,0x00,0x00,0x00,0x00,0x00,0x07,0xC1,0xC1,0x00,0x00,0x02,0x00,0x00,0x00,0x00,0x00,0x16,0x00,0x10,0x20,0x06,0x37,0x0F,0x00,0x00,0xC8]
