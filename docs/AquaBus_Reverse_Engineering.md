@@ -1,102 +1,92 @@
-# AquaBus Reverse Engineering
+# AquaBus / SystaSolar Aqua Reverse Engineering
 
-> Community-Dokumentation für den Paradigma SystaSolar Aqua / SystaBus.
->
-> Dieses Dokument fasst die bisherigen Erkenntnisse aus Messungen, Display-Vergleichen,
-> ESPHome-Logs und praktischen Tests zusammen. Es ist bewusst als Arbeitsstand
-> geschrieben und darf/soll erweitert werden.
+Community-Dokumentation für Paradigma SystaSolar Aqua am SystaBus. Arbeitsstand aus praktischen Messungen, Display-Vergleichen, ESPHome-Logs und SET-Telegrammen.
 
-## 1. Ziel
+## Kurzstatus
 
-Ziel ist das Lesen und teilweise Schreiben von Daten auf dem Solar-Bus einer
-Paradigma SystaSolar Aqua Steuerung mit einem ESP-basierten Adapter und ESPHome.
+### Bestätigt
 
-Aktueller Stand:
+- `FC 24 0B 01` ist der zentrale Monitorframe der getesteten SystaSolar Aqua.
+- Temperaturen sind dekodiert: TSA/Kollektor, TSE/Eintritt, TWU/Speicher unten, TW2/Speicher 2 beziehungsweise fehlender Sensor.
+- `frame[12]` ist PSO, also Pumpenansteuerung in Prozent.
+- `frame[14]` ist Status Solar.
+- Status `3` bedeutet: solare Wärme einspeisen.
+- Status `6` bedeutet: Betriebsart Hand/Test/Aus. Aus, Test und Hand wurden praktisch getestet und liefern alle Status 6.
+- Status `8` bedeutet: Kollektortemperatur zu niedrig / abgeschaltet.
+- `frame[24..27]` ist Tagesertrag in kWh.
+- `frame[28..31]` ist Gesamtertrag in kWh.
+- Checksumme ist `0x00 - Summe(alle Bytes ohne Checksumme)`.
+- Eine aktuelle Solarleistung wird im FC24-Frame nicht direkt übertragen und wird aus Volumenstrom und ΔT berechnet.
 
-- FC24-Monitortelegramm wird stabil gelesen.
-- Temperaturen, Pumpenansteuerung, Status, Störung, Tagesertrag und Gesamtertrag sind dekodiert.
-- Auto/Aus/Hand-Schreibtelegramme sind bekannt, aber mit Vorsicht zu verwenden.
-- ESP8266 funktioniert, zeigt aber unter ESPHome/WLAN/UART Last Watchdog-Resets.
-- ESP32-S3 Mini wird als stabilere Zielplattform empfohlen.
+### Offen
+
+- Bedeutung von `frame[22..23]`.
+- Bedeutung von `frame[32..37]`.
+- Ob der Volumenstrom irgendwo im Bus übertragen wird oder nur als Reglerparameter existiert.
+- Minimaler sicherer SET-Befehl statt großem Parameterblock.
+- Saubere ESP32-S3 Pinbelegung auf der vorhandenen Adapterplatine final testen.
+- Verhalten von ULV, falls ein Umlenkventil aktiv ist.
 
 ---
 
-## 2. Hardware
+## 1. Getestete Hardware
 
-### 2.1 Getestete Steuerung
+### Steuerung
 
 - Paradigma SystaSolar Aqua
 - Display-Firmware im Test: `V3.00 060613`
-- Bus-Anschluss am Regler: `BUS + / -`
+- Bus-Anschluss am Regler: `BUS + / BUS -`
 
-### 2.2 Getesteter Adapter
+### Adapter
 
-Im Projekt wurde ein kleiner Bus-Leser verwendet. Zur Vermeidung von Namens-/Markenverwechslungen
-wird er hier neutral **AquaBus Adapter** genannt.
+Der verwendete Adapter wird hier neutral **AquaBus Adapter** genannt.
 
-Typischer Aufbau:
+Beobachteter Aufbau:
 
 - Bus-Klemme `BUS+ / BUS-`
-- Optokoppler/Transistor-Stufe zur Pegelaufbereitung
-- ESP8266 D1 Mini kompatibles Steckmodul
+- D1-Mini-kompatibler Steckplatz
 - Datenleitung auf GPIO13
-- Versorgung über USB oder Adapterplatine
+- Versorgung über USB/Adapterplatine
 
-### 2.3 Getesteter ESP
+### ESP8266
 
-Verwendet wurde ein D1-Mini-kompatibles ESP8266-Board:
+Getestet:
 
-- ESP8266EX
+- ESP8266EX D1 Mini kompatibles Board
 - CH340C USB-Seriell
 - USB-C
 - D1-Mini-Pinout
 
-### 2.4 Empfohlener ESP für Weiterentwicklung
+### ESP32 Empfehlung
 
-Empfohlen: **LOLIN ESP32-S3 Mini**
+Empfohlen für Weiterentwicklung:
+
+- LOLIN ESP32-S3 Mini
 
 Gründe:
 
-- deutlich mehr RAM
-- stabilere UART-Verarbeitung
-- echte ESP32-Plattform statt ESP8266-SoftwareSerial
-- ESPHome gut unterstützt
-- gleiche grobe D1-Mini-Bauform
-- GPIO13 vorhanden
+- mehr RAM
+- bessere UART-Verarbeitung
+- ESPHome-Unterstützung
+- weniger Watchdog-Probleme als ESP8266 + SoftwareSerial
+- D1-Mini-ähnliche Bauform
 
-Nicht blind 1:1 einstecken, vorher Pinout prüfen. Mechanisch sieht es passend aus,
-elektrisch muss die Datenleitung des Adapters auf den passenden ESP32-S3-GPIO gelegt werden.
+Wichtig: Nicht blind 1:1 stecken. Pinout prüfen, insbesondere die Bus-Datenleitung.
 
 ---
 
-## 3. Anschluss / Pinbelegung
+## 2. Busparameter
 
-### 3.1 Reglerseite
-
-Am SystaSolar Aqua Regler:
-
-| Reglerklemme | Bedeutung |
+| Parameter | Wert |
 |---|---|
-| BUS + | Bus Plus |
-| BUS - | Bus Minus |
+| Baudrate | 9600 |
+| Datenbits | 8 |
+| Parität | NONE |
+| Stopbits | 1 |
+| Richtung | RX zum Lesen, TX für SET-Kommandos |
+| Frame-Erkennung | Startbytes / Header |
 
-### 3.2 Adapterseite
-
-Beobachtete/abgeleitete Adapter-Pins:
-
-| Adapter-Beschriftung | Bedeutung |
-|---|---|
-| BUS + | an Regler BUS + |
-| BUS - | an Regler BUS - |
-| DATA | aufbereitete Bus-Daten |
-| 3.3V | Logikversorgung |
-| GND | Masse |
-| 5V | Versorgung |
-| GPIO13 | Datenleitung zum ESP |
-
-### 3.3 ESPHome UART, ESP8266
-
-Aktuell genutzt:
+ESPHome UART auf ESP8266 im Test:
 
 ```yaml
 uart:
@@ -109,29 +99,11 @@ uart:
   stop_bits: 1
 ```
 
-Hinweis: Auf ESP8266 ist GPIO13 hier über ESPHome als SoftwareSerial im Einsatz.
-Das ist wahrscheinlich die Ursache für Watchdog-Resets bei hoher Last.
-
 ---
 
-## 4. UART / Busparameter
+## 3. Checksumme
 
-Bisher funktionierende Parameter:
-
-| Parameter | Wert |
-|---|---|
-| Baudrate | 9600 |
-| Datenbits | 8 |
-| Parität | NONE |
-| Stopbits | 1 |
-| Richtung | Lesen RX; Schreiben über UART möglich |
-| Frame-Erkennung | über Startbytes |
-
----
-
-## 5. Checksumme
-
-Für die beobachteten Telegramme gilt:
+Checksumme über kompletten Frame außer letztem Byte:
 
 ```cpp
 uint8_t sum = 0;
@@ -141,221 +113,259 @@ for (size_t i = 0; i < frame.size() - 1; i++) {
 bool ok = frame.back() == (uint8_t)(0 - sum);
 ```
 
-Also:
+Kurz:
 
 ```text
-Checksumme = 0x00 - Summe(alle Bytes außer Checksumme)
+checksum = 0x00 - sum(frame_without_checksum)
 ```
 
 ---
 
-## 6. Bekannte Telegrammtypen
+## 4. FC24 Monitorframe
 
-### 6.1 FC24 Monitorframe
-
-Dies ist aktuell das wichtigste Telegramm.
-
-Beispiel:
+### Beispiel: Hand/Aus/Test-Gruppe
 
 ```text
 FC 24 0B 01 01 F7 01 C0 02 21 FE E0 00 00 06 00 00 00 17 06 17 06 00 00 00 00 00 0A 00 00 1F 49 29 00 80 00 11 00 AE
 ```
 
-Interpretation:
+Dekodiert:
 
 ```text
-TSA    = 50.3 °C
-TSE    = 44.8 °C
-TWU    = 54.5 °C
-TW2    = -28.8 °C / Sensor nicht vorhanden
-PSO    = 0 %
-ULV    = 0
-Status = 6
-Störung= 0
-Zeit   = 17:06 17.06
-Tag    = 10 kWh
-Gesamt = 8009 kWh
+TSA     50.3 °C
+TSE     44.8 °C
+TWU     54.5 °C
+TW2    -28.8 °C / Sensor fehlt
+PSO      0 %
+ULV      0
+Status   6
+Störung  0
+Zeit    17:06 17.06
+Tag     10 kWh
+Gesamt  8009 kWh
 ```
 
-Gesamtlänge im ESPHome-Log: 39 Bytes inklusive Checksumme.
+### Beispiel: Automatik, solare Wärme einspeisen, PSO 50 %
+
+```text
+FC 24 0B 01 02 04 01 C8 01 D3 FE E0 32 00 03 00 00 00 07 28 18 06 00 00 00 00 00 00 00 00 1F 49 29 00 00 00 00 00 40
+```
+
+Dekodiert:
+
+```text
+TSA     51.6 °C
+TSE     45.6 °C
+TWU     46.7 °C
+TW2    -28.8 °C / Sensor fehlt
+PSO     50 %
+ULV      0
+Status   3 = Solare Wärme einspeisen
+Störung  0
+Zeit    07:28 18.06
+Tag      0 kWh
+Gesamt  8009 kWh
+```
+
+### Beispiel: Automatik, solare Wärme einspeisen, PSO 100 %
+
+```text
+FC 24 0B 01 02 8A 02 31 02 40 FE E0 64 00 03 00 00 00 10 05 18 06 00 00 00 00 00 03 00 00 1F 4C 29 00 00 00 00 00 C4
+```
+
+Dekodiert:
+
+```text
+TSA     65.0 °C
+TSE     56.1 °C
+TWU     57.6 °C
+TW2    -28.8 °C / Sensor fehlt
+PSO    100 %
+ULV      0
+Status   3 = Solare Wärme einspeisen
+Störung  0
+Zeit    10:05 18.06
+Tag      3 kWh
+Gesamt  8012 kWh
+```
+
+Späterer Frame:
+
+```text
+... 00 00 00 03 00 00 1F 4D ...
+```
+
+zeigt:
+
+```text
+Tagesertrag = 3 kWh
+Gesamtertrag = 8013 kWh
+```
+
+Damit sind Tages- und Gesamtertrag bestätigt.
 
 ---
 
-## 7. FC24 Offsets
+## 5. FC24 Offsets
 
 Offset ist nullbasiert, also `frame[0] = 0xFC`.
 
 | Offset | Länge | Beispiel | Bedeutung | Status |
 |---:|---:|---|---|---|
 | 0 | 1 | FC | Start / Telegrammtyp | bestätigt |
-| 1 | 1 | 24 | Länge / Frame-Kennung | bestätigt |
+| 1 | 1 | 24 | Länge / Kennung | bestätigt |
 | 2 | 1 | 0B | Kommando | bestätigt |
 | 3 | 1 | 01 | Subkommando | bestätigt |
-| 4-5 | 2 | 01 F7 | TSA Kollektor, signed int16 / 10 | bestätigt |
-| 6-7 | 2 | 01 C0 | TSE Eintritt/Rücklauf, signed int16 / 10 | bestätigt |
-| 8-9 | 2 | 02 21 | TWU Speicher unten, signed int16 / 10 | bestätigt |
-| 10-11 | 2 | FE E0 | TW2, signed int16 / 10 | bestätigt, bei Anlage nicht vorhanden |
+| 4-5 | 2 | 02 8A | TSA Kollektor, signed int16 / 10 | bestätigt |
+| 6-7 | 2 | 02 31 | TSE Eintritt/Rücklauf, signed int16 / 10 | bestätigt |
+| 8-9 | 2 | 02 40 | TWU Speicher unten, signed int16 / 10 | bestätigt |
+| 10-11 | 2 | FE E0 | TW2, signed int16 / 10 | bestätigt, bei Testanlage nicht vorhanden |
 | 12 | 1 | 00 / 32 / 64 | PSO Solarpumpe in % | bestätigt |
 | 13 | 1 | 00 | ULV Umlenkventil | plausibel |
 | 14 | 1 | 03 / 06 / 08 | Status Solar | bestätigt |
 | 15 | 1 | 00 | Störcode | bestätigt |
 | 16 | 1 | 00 | Frostschutz | plausibel |
-| 17 | 1 | 00 | Ctr / Counter / Diagnose | unklar |
-| 18 | 1 | 17 | Stunde, BCD/hex-dezimal | bestätigt |
-| 19 | 1 | 06 | Minute, BCD/hex-dezimal | bestätigt |
-| 20 | 1 | 17 | Tag, BCD/hex-dezimal | bestätigt |
+| 17 | 1 | 00 | Ctr / Counter / Diagnose | offen |
+| 18 | 1 | 10 | Stunde, BCD/hex-dezimal | bestätigt |
+| 19 | 1 | 05 | Minute, BCD/hex-dezimal | bestätigt |
+| 20 | 1 | 18 | Tag, BCD/hex-dezimal | bestätigt |
 | 21 | 1 | 06 | Monat, BCD/hex-dezimal | bestätigt |
-| 22-23 | 2 | 00 00 | Zähler/Reserve, evtl. Fehlzirkulation | unklar |
-| 24-27 | 4 | 00 00 00 0A | Tagesenergie in kWh | bestätigt |
-| 28-31 | 4 | 00 00 1F 49 | Gesamtenergie in kWh | bestätigt |
+| 22-23 | 2 | 00 00 | Zähler/Reserve, evtl. Fehlzirkulation | offen |
+| 24-27 | 4 | 00 00 00 03 | Tagesenergie in kWh | bestätigt |
+| 28-31 | 4 | 00 00 1F 4D | Gesamtenergie in kWh | bestätigt |
 | 32 | 1 | 29 | unbekannt | offen |
 | 33 | 1 | 00 | unbekannt / Jahr? | offen |
-| 34 | 1 | 80 | Taste/Flags? | offen |
+| 34 | 1 | 00 / 80 | Taste/Flags? | offen |
 | 35 | 1 | 00 | Diagnose Korr? | offen |
-| 36 | 1 | 11 | Diagnose Merkmale 1? | offen |
+| 36 | 1 | 00 / 11 | Diagnose Merkmale 1? | offen |
 | 37 | 1 | 00 | Diagnose Merkmale 2? | offen |
-| 38 | 1 | AE | Checksumme | bestätigt |
+| 38 | 1 | C4 | Checksumme | bestätigt |
 
 ---
 
-## 8. Bestätigte Display-Vergleiche
+## 6. Temperaturen
 
-### 8.1 Temperaturen
+Temperaturen sind Big Endian signed int16, Faktor 0,1.
 
-Display zeigte unter anderem:
-
-```text
-TSA 51,3 °C
-TSE 46,5 °C
-TWU 57,2 °C
+```cpp
+float tsa = read_i16(4) / 10.0;
+float tse = read_i16(6) / 10.0;
+float twu = read_i16(8) / 10.0;
+float tw2 = read_i16(10) / 10.0;
 ```
 
-Die Buswerte passten zu:
+Beispiel:
 
 ```text
-Kollektor / TSA
-Eintritt / TSE
-Speicher Unten / TWU
+02 8A = 650 = 65.0 °C
+FE E0 = -288 = -28.8 °C
 ```
 
-### 8.2 Erträge
-
-Display zeigte:
-
-```text
-Solargewinn Tag: 10 kWh
-Solargewinn Gesamt: 8009 kWh
-```
-
-Buswerte:
-
-```text
-Tagesenergie = 10
-Gesamtenergie = 8009
-```
-
-### 8.3 Pumpe
-
-Display:
-
-```text
-Pumpe Solar PSO 0 %
-```
-
-Bus:
-
-```text
-frame[12] = 0x00
-```
-
-Display Handbetrieb:
-
-```text
-Pumpe Solar PSO 100 %
-```
-
-Bus:
-
-```text
-frame[12] = 0x64
-```
-
-Damit ist `frame[12] = PSO in Prozent` bestätigt.
+`FE E0` wird bei der Testanlage als nicht vorhandener TW2-Sensor interpretiert.
 
 ---
 
-## 9. Statuscodes
-
-Status kommt aus `frame[14]`.
-
-| Code | Bedeutung | Status |
-|---:|---|---|
-| 0 | Maximale Speichertemperatur erreicht | aus Doku/Mapping |
-| 1 | Stillstand, Dampf im Kollektor | aus Doku/Mapping |
-| 2 | Frostschutzfunktion aktiv | aus Doku/Mapping |
-| 3 | Solare Wärme einspeisen | beobachtet/plausibel |
-| 4 | Anschiebefunktion aktiv | aus Doku/Mapping |
-| 5 | Einschaltverzögerung | aus Doku/Mapping |
-| 6 | Betriebsart Hand/Test/Aus | bestätigt |
-| 7 | Störabschaltung | aus Doku/Mapping |
-| 8 | Kollektortemperatur zu niedrig / abgeschaltet | bestätigt |
-
-### Beobachtungen
-
-#### Status 8
-
-Situation:
-
-```text
-TSA < TWU
-PSO = 0 %
-Reglerstatus Display = Abgeschaltet
-```
-
-Interpretation:
-
-```text
-Status 8 = Kollektortemperatur zu niedrig / keine Einspeisung
-```
-
-#### Status 6
-
-Getestete Betriebsarten:
-
-- Aus
-- Test
-- Hand
-
-Alle ergaben:
-
-```text
-Status = 6
-```
-
-Daher kann der FC24-Monitorframe diese drei Betriebsarten nicht sauber unterscheiden.
-Er zeigt nur: Regelbetrieb verlassen / Hand-Test-Aus-Gruppe.
-
----
-
-## 10. PSO / Pumpenansteuerung
+## 7. Pumpenansteuerung PSO
 
 `frame[12]`
 
-| Wert hex | Wert dezimal | Bedeutung |
+| Hex | Dezimal | Bedeutung |
 |---|---:|---|
 | 00 | 0 | Pumpe aus |
 | 32 | 50 | Pumpe 50 % |
 | 64 | 100 | Pumpe 100 % |
 
+Bestätigt durch Displayvergleich:
+
+- Pumpe Solar 0 % -> `frame[12] = 00`
+- Hand Pumpe 100 % -> `frame[12] = 64`
+- Automatikladung mit Mindestdrehzahl 50 % -> `frame[12] = 32`
+
 Die Pumpe ist PWM- oder frequenzgesteuert. PSO ist der Stellwert in Prozent.
 
 ---
 
-## 11. Solarleistung
+## 8. Statuscodes
 
-Der FC24-Frame enthält nach aktuellem Stand **keine direkte Leistung in Watt**.
+`frame[14]`
 
-Eine Näherung kann berechnet werden über:
+| Code | Bedeutung | Status |
+|---:|---|---|
+| 0 | Maximale Speichertemperatur erreicht | Mapping |
+| 1 | Stillstand, Dampf im Kollektor | Mapping |
+| 2 | Frostschutzfunktion aktiv | Mapping |
+| 3 | Solare Wärme einspeisen | bestätigt |
+| 4 | Anschiebefunktion aktiv | Mapping |
+| 5 | Einschaltverzögerung | Mapping |
+| 6 | Betriebsart Hand/Test/Aus | bestätigt |
+| 7 | Störabschaltung | Mapping |
+| 8 | Kollektortemperatur zu niedrig / abgeschaltet | bestätigt |
+
+### Beobachtungen
+
+Status 8:
+
+```text
+TSA < TWU
+PSO = 0 %
+Display: Abgeschaltet
+```
+
+Status 6:
+
+```text
+Betriebsart Aus  -> Status 6
+Betriebsart Test -> Status 6
+Betriebsart Hand -> Status 6
+```
+
+Status 3:
+
+```text
+Auto, Pumpe läuft, solare Wärme wird eingespeist -> Status 3
+```
+
+---
+
+## 9. Erträge
+
+### Tagesertrag
+
+`frame[24..27]`, Big Endian uint32, Einheit kWh.
+
+```cpp
+uint32_t tagesenergie = read_u32(24);
+```
+
+Beispiel:
+
+```text
+00 00 00 03 = 3 kWh
+```
+
+### Gesamtertrag
+
+`frame[28..31]`, Big Endian uint32, Einheit kWh.
+
+```cpp
+uint32_t gesamtenergie = read_u32(28);
+```
+
+Beispiele:
+
+```text
+00 00 1F 49 = 8009 kWh
+00 00 1F 4C = 8012 kWh
+00 00 1F 4D = 8013 kWh
+```
+
+---
+
+## 10. Solarleistung
+
+Der FC24-Frame enthält nach aktuellem Stand **keinen direkten Leistungswert in Watt**.
+
+Berechnung:
 
 ```text
 P [W] = Volumenstrom [l/min] × ΔT [K] × 69,78
@@ -367,7 +377,7 @@ mit:
 ΔT = TSA - TSE
 ```
 
-Bei am Regler eingestelltem Volumenstrom:
+Bei gemessenem/eingestelltem Volumenstrom:
 
 ```text
 Volumenstrom = 2,5 l/min
@@ -379,17 +389,29 @@ ergibt sich:
 P [W] = 2,5 × (TSA - TSE) × 69,78
 ```
 
-Wichtig:
+Nur berechnen, wenn:
 
-- Nur sinnvoll, wenn PSO > 0.
-- Bei PSO = 0 sollte Leistung = 0 W gesetzt werden.
-- Der Volumenstrom ist ein Reglerparameter und nicht sicher im FC24-Frame enthalten.
+```text
+PSO > 0
+ΔT > 0
+```
+
+Sonst:
+
+```text
+P = 0 W
+```
+
+Beobachtete berechnete Werte:
+
+- ca. 1047 W bei PSO 50 %
+- ca. 1553 W bei PSO 100 %
 
 ---
 
-## 12. Bekannte Reglerparameter vom Display
+## 11. Display-Parameter
 
-Aus dem Menü abgelesen:
+Aus dem Regler-Menü abgelesen:
 
 | Parameter | Wert |
 |---|---|
@@ -407,56 +429,41 @@ Aus dem Menü abgelesen:
 
 ---
 
-## 13. Schreibtelegramme / SET-Befehle
+## 12. SET-Kommandos / Schreibbefehle
 
-Es wurden drei lange SET-Sequenzen gefunden.
+Es wurden SET-Sequenzen für Auto, Aus und Hand gefunden.
 
-> Achtung: Diese Sequenzen scheinen nicht nur eine einzelne Betriebsart zu setzen,
-> sondern möglicherweise einen kompletten Parameterblock zu übertragen.
-> Vor produktiver Nutzung unbedingt am eigenen Regler testen und verstehen.
+> Warnung: Die Sequenzen scheinen einen größeren Parameterblock zu übertragen. Nicht unkritisch produktiv verwenden, bevor klar ist, welche Parameter mitgeschrieben werden.
 
-### 13.1 Solar Auto
+### 12.1 Gemeinsamer Header
+
+```text
+0A 53 1D 0B 11 53 45 54
+```
+
+`53 45 54` entspricht ASCII `SET`.
+
+### 12.2 Solar Auto
 
 ```text
 0A 53 1D 0B 11 53 45 54 00 01 00 00 00 00 0F 5B 46 40 00 36 B0 A0 00 03 02 A0 02 62 00 02 BC 01 F4 00 32 00 32 00 30 0B 00 00 00 00 00 00 08 2D 0D 81 00 00 00 01 00 00 00 00 00 00 07 C1 C1 00 00 02 00 00 00 00 00 16 00 10 20 06 37 0F 00 00 CB
 ```
 
-Auffällig:
-
-```text
-Modebyte vermutlich = 00
-Checksumme = CB
-```
-
-### 13.2 Solar Aus
+### 12.3 Solar Aus
 
 ```text
 0A 53 1D 0B 11 53 45 54 01 01 00 00 00 00 0F 5B 46 40 00 36 B0 A0 00 03 02 A0 02 62 00 02 BC 01 F4 00 32 00 32 00 30 0B 00 00 00 00 00 00 08 2D 0D 81 00 00 00 01 00 00 00 00 00 00 07 C1 C1 00 00 02 00 00 00 00 00 16 00 10 20 06 37 0F 00 00 CA
 ```
 
-Auffällig:
-
-```text
-Modebyte vermutlich = 01
-Checksumme = CA
-```
-
-### 13.3 Solar Hand
+### 12.4 Solar Hand
 
 ```text
 0A 53 1D 0B 11 53 45 54 03 01 00 00 00 00 0F 5B 46 40 00 36 B0 A0 00 03 02 A0 02 62 00 02 BC 01 F4 00 32 00 32 00 30 0B 00 00 00 00 00 00 08 2D 0D 81 00 00 00 01 00 00 00 00 00 00 07 C1 C1 00 00 02 00 00 00 00 00 16 00 10 20 06 37 0F 00 00 C8
 ```
 
-Auffällig:
+### 12.5 Unterschiede
 
-```text
-Modebyte vermutlich = 03
-Checksumme = C8
-```
-
-### 13.4 Unterschied der SET-Telegramme
-
-| Betriebsart | Byte an Position 8 | Checksumme |
+| Betriebsart | Byte nach `SET` | Checksumme |
 |---|---:|---:|
 | Auto | 00 | CB |
 | Aus | 01 | CA |
@@ -464,9 +471,7 @@ Checksumme = C8
 
 ---
 
-## 14. ESPHome Beispiel: Lesen FC24
-
-Kernlogik:
+## 13. ESPHome Decoder-Kern
 
 ```cpp
 if (!(bytes[0] == 0xFC && bytes[1] == 0x24 && bytes[2] == 0x0B && bytes[3] == 0x01)) {
@@ -489,42 +494,9 @@ uint32_t gesamtenergie = read_u32(28);
 
 ---
 
-## 15. ESPHome Beispiel: berechnete Leistung
+## 14. Home Assistant Entities
 
-```cpp
-float delta_t = tsa - tse;
-float solar_leistung = 0.0;
-
-if (pso > 0 && delta_t > 0.0) {
-  solar_leistung = 2.5 * delta_t * 69.78;
-}
-```
-
----
-
-## 16. ESPHome Beispiel: Schreibbutton
-
-Beispiel für Solar Auto:
-
-```yaml
-button:
-  - platform: template
-    name: "Solar Auto setzen"
-    icon: "mdi:white-balance-sunny"
-    on_press:
-      - uart.write:
-          id: uart_bus
-          data: [0x0A, 0x53, 0x1D, 0x0B, 0x11, 0x53, 0x45, 0x54, 0x00, 0x01, 0x00]
-```
-
-Hinweis: Im produktiven Code muss das komplette Telegramm inklusive Checksumme gesendet werden.
-Die Kurzform oben zeigt nur das Prinzip.
-
----
-
-## 17. Home Assistant Entities
-
-Bekannte/gewünschte Entities:
+Empfohlene Entities:
 
 | Name | Typ | Einheit |
 |---|---|---|
@@ -545,21 +517,11 @@ Bekannte/gewünschte Entities:
 | Regler Zeit | Text Sensor | Text |
 | SystaBus Raw | Text Sensor | Hex |
 
-### Dashboard-Fehler
-
-Wenn im Dashboard steht:
-
-```text
-Entity not available: sensor.solar_15d031_solar_leistung
-```
-
-dann fehlt der Sensor `Solar Leistung` in ESPHome oder die Entity-ID hat sich geändert.
-
 ---
 
-## 18. ESP8266 Crash-Analyse
+## 15. ESP8266 Watchdog / Crash
 
-Beobachteter Fehler:
+Beobachtet:
 
 ```text
 Hardware WDT - Level1Int
@@ -569,77 +531,37 @@ ESP8266SoftwareSerial::gpio_intr
 
 Interpretation:
 
-- Watchdog Reset
-- Interruptlast im ESP8266
-- SoftwareSerial auf GPIO13
-- WLAN/API gleichzeitig aktiv
-- zu viel Logging oder zu häufiges Publishen kann das verschlimmern
+- ESP8266 wird im Zusammenspiel von WLAN, API und SoftwareSerial-Interrupts überlastet.
+- Der Decoder selbst ist nicht offensichtlich falsch.
+- Weniger Logging reduziert Last, behebt aber nicht zwingend die Ursache.
 
-### Gegenmaßnahmen
+Gegenmaßnahmen:
 
 - `logger.level: WARN`
 - `baud_rate: 0`
-- Raw-Frame nicht dauerhaft publishen
 - Sensorwerte nur bei Änderung publishen
-- Frostschutz/Ctr ebenfalls nur bei Änderung publishen
-- ESP32-S3 verwenden
-
----
-
-## 19. Empfohlene ESPHome-Stabilisierung
-
-```yaml
-logger:
-  level: WARN
-  baud_rate: 0
-
-api:
-  reboot_timeout: 0s
-
-wifi:
-  reboot_timeout: 5min
-```
-
-In der Lambda:
-
-- letzte Werte merken
-- nur bei Änderung veröffentlichen
 - Raw-Frame optional deaktivieren
-- keine großen `ESP_LOGI` Ausgaben im Dauerbetrieb
+- ESP32-S3 mit Hardware-UART verwenden
 
 ---
 
-## 20. Offene Punkte
+## 16. Offene Punkte
 
-Noch nicht vollständig geklärt:
+Aktuell offen:
 
-- Bedeutung von Offset 22-23
-- Bedeutung von Offset 32-37
-- ob Volumenstrom irgendwo im Bus übertragen wird
-- ob Betriebsart Auto/Aus/Hand separat in einem anderen Frame sichtbar ist
-- vollständige Display-Text-Telegramme
-- sicherer minimaler SET-Befehl statt großem Parameterblock
-- saubere ESP32-S3 Pinbelegung für den Adapter
-
----
-
-## 21. To-do für das GitHub-Projekt
-
-- [ ] ESPHome Beispiel für ESP8266 hinzufügen
-- [ ] ESPHome Beispiel für ESP32-S3 hinzufügen
-- [ ] Adapter-Pinout grafisch dokumentieren
-- [ ] FC24 Decoder als Tabelle pflegen
-- [ ] SET-Kommandos nur mit Warnhinweis dokumentieren
-- [ ] Home Assistant Dashboard Beispiel hinzufügen
-- [ ] Testlogs sammeln: Auto lädt / Auto steht / Hand / Aus / Test
-- [ ] Prüfen, ob ULV jemals 1 wird
-- [ ] Prüfen, ob Status 3 bei Automatikladung immer gilt
+1. Bedeutung von `frame[22..23]`.
+2. Bedeutung von `frame[32..37]`.
+3. Ob Volumenstrom irgendwo im Busframe übertragen wird.
+4. Sicherer minimaler SET-Befehl statt großem Parameterblock.
+5. ESP32-S3 Pinbelegung auf Adapter final testen.
+6. Verhalten von ULV mit real aktivem Umlenkventil.
+7. Langzeittest ohne Raw-Frame und mit ESP32-S3.
+8. Optional: eigener ESPHome-External-Component Decoder statt `uart.debug`-Lambda.
 
 ---
 
-## 22. Haftungsausschluss
+## 17. Haftungsausschluss
 
 Diese Dokumentation ist ein Reverse-Engineering-Arbeitsstand.
 
-Schreibtelegramme können Reglerparameter verändern. Nutzung auf eigene Gefahr.
-Vor Einsatz an produktiven Heizungs-/Solaranlagen Sicherung, Dokumentation und Rückstellmöglichkeit prüfen.
+Schreibtelegramme können Reglerparameter verändern. Nutzung auf eigene Gefahr. Vor Einsatz an produktiven Heizungs- oder Solaranlagen Sicherung, Dokumentation und Rückstellmöglichkeit prüfen.
