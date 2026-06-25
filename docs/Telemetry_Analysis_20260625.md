@@ -25,7 +25,7 @@
 ### Temperatur-Trends
 
 **Kollektor (TSA) zeigt kontinuierliche Abkühlung:**
-- 20:45:23: 49.6°C → 21:20:23: 39.5°C
+- 20:45:23: 49.6°C → 21:20:23: 39.8°C
 - Gradient: ca. 0.3°C pro Minute
 - **Interpretation**: Kollektorfläche kühlt ab, nicht genug Sonneneinstrahlung für Einspeisung
 
@@ -36,7 +36,7 @@
 
 **Rücklauf (TSE) folgt Kollektor-Trend:**
 - TSE bleibt ~2–4°C unter TSA
-- **Interpretation**: Speicher wärmer als Kollektor → keine solare Wärmeeinspesung
+- **Interpretation**: Speicher wärmer als Kollektor → keine solare Wärmeeinspeisung
 
 ---
 
@@ -125,7 +125,7 @@ Erwartete Änderungen bei anderen Status-Werten:
 
 | Status | Beschreibung | Bytes22-23 | Bytes32-37 |
 |--------|--------------|------------|-----------|
-| 0 | Max. Speichertarmperat. | ? | 29 00 ? ? ? ? |
+| 0 | Max. Speichertemperatur | ? | 29 00 ? ? ? ? |
 | 1 | Stillstand, Dampf | ? | 29 00 ? ? ? ? |
 | 2 | Frostschutz aktiv | ? | 29 00 ? ? ? ? |
 | 3 | Solare Wärme einspeisen | **erwartet: != 00 00** | **erwartet: != 00 00 00 00** |
@@ -176,7 +176,7 @@ Erwartete Änderungen bei anderen Status-Werten:
 
 ## Hypothesen-Katalog
 
-### Hypothesis A: Reserve-Bytes
+### Hypothese A: Reserve-Bytes
 
 ```
 Byte22-23: Reserve für zukünftige Firmware-Versionen
@@ -186,7 +186,7 @@ Bytes32-37: Geräte-ID + Reserved Bits
 **Wahrscheinlichkeit**: 30%  
 **Grund**: Zu konsistent für Reserve
 
-### Hypothesis B: Zähler + Status
+### Hypothese B: Zähler + Status
 
 ```
 Byte22-23: Operativer Zähler (Schaltzähler, Fehlerzähler)
@@ -196,7 +196,7 @@ Bytes32-37: Firmware-ID (32) + Status-Bits (33-37)
 **Wahrscheinlichkeit**: 60%  
 **Grund**: Erklärt Konstanz unter Status 8
 
-### Hypothesis C: Diagnose + HMI
+### Hypothese C: Diagnose + HMI
 
 ```
 Byte22-23: Diagnose-Merkmale

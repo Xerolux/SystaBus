@@ -625,7 +625,7 @@ uint8_t diag_status_2 = frame[36];   // Diagnose 2 / Fehler
 uint8_t diag_status_3 = frame[37];   // Reserve / Fehler
 
 // Reserve / Zähler
-uint16_t counter_or_reserve = (frame[22] << 8) | frame[23];
+uint16_t counter_or_reserve = ((uint16_t)frame[22] << 8) | frame[23];
 ```
 
 ---
