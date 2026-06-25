@@ -17,7 +17,7 @@ esp32:
   variant: esp32s3
   framework:
     type: esp-idf
-    version: latest
+    version: "6.0.1"
     sdkconfig_options:
       CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
       CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
