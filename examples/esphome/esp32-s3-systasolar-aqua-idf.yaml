@@ -8,10 +8,10 @@ substitutions:
   solar_flow_l_min: "2.5"
   # Messphase 2: Raw-Frame deaktiviert (255er-Limit bereits gelöst durch State Change Detection)
   # Statische IP-Konfiguration (an dein Netzwerk anpassen)
-  static_ip: "192.168.1.50"
-  static_gateway: "192.168.1.1"
+  static_ip: "192.168.180.78"
+  static_gateway: "192.168.180.1"
   static_subnet: "255.255.255.0"
-  static_dns: "192.168.1.1"
+  static_dns: "192.168.180.1"
 
 esphome:
   name: ${device_name}
