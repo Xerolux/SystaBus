@@ -182,11 +182,7 @@ uart:
             snprintf(update_buf, sizeof(update_buf), "Reglerzeit %s", zeit_buf);
           }
 
-          // ===== 255-CHAR-FIX: Raw Frame nur auf Anfrage (sehr kompakt) =====
-          std::string raw_hex_compact;
-          #if ${raw_frame_logging} == "true"
-            for (auto b : frame) { char buf[4]; snprintf(buf, sizeof(buf), "%02X ", b); raw_hex_compact += buf; }
-          #endif
+          // Raw-Frame deaktiviert für Phase 2 (255er-Limit durch State Change Detection gelöst)
 
           // ===== State Change Detection (Vergleich mit letztem Wert) =====
           static float last_tsa = NAN, last_tse = NAN, last_twu = NAN, last_tw2 = NAN, last_power = NAN;
@@ -195,7 +191,7 @@ uart:
           static uint8_t last_byte34 = 255, last_byte35 = 255, last_byte36 = 255, last_byte37 = 255;
           static uint32_t last_tag = 0xFFFFFFFF, last_gesamt = 0xFFFFFFFF;
           static bool last_solar_active = false;
-          static std::string last_zeit = "", last_status_text = "", last_stoer_text = "", last_raw = "", last_update = "";
+          static std::string last_zeit = "", last_status_text = "", last_stoer_text = "", last_update = "";
 
           // ===== TEMPERATURE PUBLISHING =====
           if (temp_valid(tsa) && (isnan(last_tsa) || fabs(tsa - last_tsa) >= 0.1)) {
@@ -279,10 +275,6 @@ uart:
           }
 
           // ===== RAW FRAME: OPTIONAL (255-CHAR-FIX) =====
-          if (!raw_hex_compact.empty() && raw_hex_compact != last_raw) {
-            id(raw_frame_hex).publish_state(raw_hex_compact);
-            last_raw = raw_hex_compact;
-          }
 
           // ===== LOGGING =====
           if (frame_count % 60 == 0) {

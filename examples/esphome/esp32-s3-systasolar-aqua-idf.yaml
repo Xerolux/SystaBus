@@ -6,6 +6,7 @@ substitutions:
   device_name: "systasolar-aqua-idf"
   device_friendly_name: "SystaSolar Aqua IDF"
   solar_flow_l_min: "2.5"
+  # Messphase 2: Raw-Frame deaktiviert (255er-Limit bereits gelöst durch State Change Detection)
 
 esphome:
   name: ${device_name}
