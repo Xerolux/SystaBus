@@ -53,11 +53,11 @@ time:
   - platform: homeassistant
     id: ha_time
 
-# Hardware-UART: GPIO16=RX, GPIO17=TX
+# Hardware-UART: GPIO13=TX, GPIO11=RX (corrected from GPIO16/17)
 uart:
   id: uart_bus
-  tx_pin: GPIO17
-  rx_pin: GPIO16
+  tx_pin: GPIO13
+  rx_pin: GPIO11
   baud_rate: 9600
   data_bits: 8
   parity: NONE
