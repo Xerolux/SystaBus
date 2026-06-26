@@ -1,0 +1,501 @@
+# SystaBus ESP32-S3 PIN SCANNER
+# Scannt alle GPIO-Pins auf Aktivität zur UART-Diagnose
+# Framework: ESP-IDF 6.0.1 | IP: 192.168.180.78
+
+substitutions:
+  device_name: "systasolar-pin-scanner"
+  device_friendly_name: "SystaSolar Pin Scanner"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${device_friendly_name}
+
+esp32:
+  board: lolin_s3_mini
+  variant: esp32s3
+  framework:
+    type: esp-idf
+    version: "6.0.1"
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
+
+logger:
+  level: DEBUG
+  baud_rate: 0
+
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 5min
+  manual_ip:
+    static_ip: 192.168.180.78
+    gateway: 192.168.180.1
+    subnet: 255.255.255.0
+    dns1: 192.168.180.1
+  ap:
+    ssid: ${device_friendly_name}-AP
+    password: !secret ap_password
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+# ===== PIN SCANNER: Alle GPIO-Pins (außer Strapping-Pins) =====
+binary_sensor:
+  # GPIO0 (Strapping) - SKIP
+  # GPIO1 (UART0 TX) - kann monitored werden
+  - platform: gpio
+    name: "GPIO1 Activity"
+    id: gpio1_sensor
+    pin:
+      number: GPIO1
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO2 (Strapping) - SKIP
+  # GPIO3 (UART0 RX) - kann monitored werden
+  - platform: gpio
+    name: "GPIO3 Activity"
+    id: gpio3_sensor
+    pin:
+      number: GPIO3
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO4
+  - platform: gpio
+    name: "GPIO4 Activity"
+    id: gpio4_sensor
+    pin:
+      number: GPIO4
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO5
+  - platform: gpio
+    name: "GPIO5 Activity"
+    id: gpio5_sensor
+    pin:
+      number: GPIO5
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO6
+  - platform: gpio
+    name: "GPIO6 Activity"
+    id: gpio6_sensor
+    pin:
+      number: GPIO6
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO7
+  - platform: gpio
+    name: "GPIO7 Activity"
+    id: gpio7_sensor
+    pin:
+      number: GPIO7
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO8
+  - platform: gpio
+    name: "GPIO8 Activity"
+    id: gpio8_sensor
+    pin:
+      number: GPIO8
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO9
+  - platform: gpio
+    name: "GPIO9 Activity"
+    id: gpio9_sensor
+    pin:
+      number: GPIO9
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO10
+  - platform: gpio
+    name: "GPIO10 Activity"
+    id: gpio10_sensor
+    pin:
+      number: GPIO10
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO11
+  - platform: gpio
+    name: "GPIO11 Activity"
+    id: gpio11_sensor
+    pin:
+      number: GPIO11
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO12
+  - platform: gpio
+    name: "GPIO12 Activity"
+    id: gpio12_sensor
+    pin:
+      number: GPIO12
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO13
+  - platform: gpio
+    name: "GPIO13 Activity"
+    id: gpio13_sensor
+    pin:
+      number: GPIO13
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO14
+  - platform: gpio
+    name: "GPIO14 Activity"
+    id: gpio14_sensor
+    pin:
+      number: GPIO14
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO15
+  - platform: gpio
+    name: "GPIO15 Activity"
+    id: gpio15_sensor
+    pin:
+      number: GPIO15
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO16 (UART2 RX - Diagnose)
+  - platform: gpio
+    name: "GPIO16 (UART2 RX) Activity"
+    id: gpio16_sensor
+    pin:
+      number: GPIO16
+      mode: INPUT
+    filters:
+      - delayed_on: 2ms
+      - delayed_off: 2ms
+
+  # GPIO17 (UART2 TX - Diagnose)
+  - platform: gpio
+    name: "GPIO17 (UART2 TX) Activity"
+    id: gpio17_sensor
+    pin:
+      number: GPIO17
+      mode: INPUT
+    filters:
+      - delayed_on: 2ms
+      - delayed_off: 2ms
+
+  # GPIO18
+  - platform: gpio
+    name: "GPIO18 Activity"
+    id: gpio18_sensor
+    pin:
+      number: GPIO18
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO19
+  - platform: gpio
+    name: "GPIO19 Activity"
+    id: gpio19_sensor
+    pin:
+      number: GPIO19
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO20
+  - platform: gpio
+    name: "GPIO20 Activity"
+    id: gpio20_sensor
+    pin:
+      number: GPIO20
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO21
+  - platform: gpio
+    name: "GPIO21 Activity"
+    id: gpio21_sensor
+    pin:
+      number: GPIO21
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO26
+  - platform: gpio
+    name: "GPIO26 Activity"
+    id: gpio26_sensor
+    pin:
+      number: GPIO26
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO27
+  - platform: gpio
+    name: "GPIO27 Activity"
+    id: gpio27_sensor
+    pin:
+      number: GPIO27
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO28
+  - platform: gpio
+    name: "GPIO28 Activity"
+    id: gpio28_sensor
+    pin:
+      number: GPIO28
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO29
+  - platform: gpio
+    name: "GPIO29 Activity"
+    id: gpio29_sensor
+    pin:
+      number: GPIO29
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO30
+  - platform: gpio
+    name: "GPIO30 Activity"
+    id: gpio30_sensor
+    pin:
+      number: GPIO30
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO31
+  - platform: gpio
+    name: "GPIO31 Activity"
+    id: gpio31_sensor
+    pin:
+      number: GPIO31
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO32
+  - platform: gpio
+    name: "GPIO32 Activity"
+    id: gpio32_sensor
+    pin:
+      number: GPIO32
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO33
+  - platform: gpio
+    name: "GPIO33 Activity"
+    id: gpio33_sensor
+    pin:
+      number: GPIO33
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO34
+  - platform: gpio
+    name: "GPIO34 Activity"
+    id: gpio34_sensor
+    pin:
+      number: GPIO34
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO35
+  - platform: gpio
+    name: "GPIO35 Activity"
+    id: gpio35_sensor
+    pin:
+      number: GPIO35
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO36
+  - platform: gpio
+    name: "GPIO36 Activity"
+    id: gpio36_sensor
+    pin:
+      number: GPIO36
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO37
+  - platform: gpio
+    name: "GPIO37 Activity"
+    id: gpio37_sensor
+    pin:
+      number: GPIO37
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO38
+  - platform: gpio
+    name: "GPIO38 Activity"
+    id: gpio38_sensor
+    pin:
+      number: GPIO38
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO39
+  - platform: gpio
+    name: "GPIO39 Activity"
+    id: gpio39_sensor
+    pin:
+      number: GPIO39
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO40
+  - platform: gpio
+    name: "GPIO40 Activity"
+    id: gpio40_sensor
+    pin:
+      number: GPIO40
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO41
+  - platform: gpio
+    name: "GPIO41 Activity"
+    id: gpio41_sensor
+    pin:
+      number: GPIO41
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO42
+  - platform: gpio
+    name: "GPIO42 Activity"
+    id: gpio42_sensor
+    pin:
+      number: GPIO42
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO44
+  - platform: gpio
+    name: "GPIO44 Activity"
+    id: gpio44_sensor
+    pin:
+      number: GPIO44
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  # GPIO45
+  - platform: gpio
+    name: "GPIO45 Activity"
+    id: gpio45_sensor
+    pin:
+      number: GPIO45
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Adresse"
+    ssid:
+      name: "WLAN"
+
+  - platform: version
+    name: "ESPHome Version"
+    hide_timestamp: true
+
+button:
+  - platform: restart
+    name: "Neustart"
