@@ -22,7 +22,7 @@ esp32:
       CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
 
 logger:
-  level: DEBUG
+  level: INFO
   baud_rate: 0
 
 api:
@@ -74,18 +74,6 @@ uart:
           static uint32_t total_bytes_received = 0;
 
           total_bytes_received += bytes.size();
-
-          // Log ALL incoming data for debugging
-          if (bytes.size() > 0) {
-            std::string hex_str;
-            for (uint8_t b : bytes) {
-              char buf[4];
-              snprintf(buf, sizeof(buf), "%02X ", b);
-              hex_str += buf;
-            }
-            ESP_LOGD("systabus", "RX[%u bytes]: %s | Total: %u bytes",
-              bytes.size(), hex_str.c_str(), total_bytes_received);
-          }
 
           auto publish_parse_error = [&]() {
             parse_errors++;
