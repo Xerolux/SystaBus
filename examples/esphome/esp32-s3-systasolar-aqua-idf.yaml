@@ -421,47 +421,6 @@ binary_sensor:
     id: solar_aktiv_sensor
     device_class: running
 
-  # ===== PIN SCANNER (DEBUG) =====
-  - platform: gpio
-    name: "GPIO16 (RX) Activity"
-    id: gpio16_rx_sensor
-    pin:
-      number: GPIO16
-      mode: INPUT
-    filters:
-      - delayed_on: 5ms
-      - delayed_off: 5ms
-
-  - platform: gpio
-    name: "GPIO17 (TX) Activity"
-    id: gpio17_tx_sensor
-    pin:
-      number: GPIO17
-      mode: INPUT
-    filters:
-      - delayed_on: 5ms
-      - delayed_off: 5ms
-
-  - platform: gpio
-    name: "GPIO9 (UART_RX_ALT)"
-    id: gpio9_sensor
-    pin:
-      number: GPIO9
-      mode: INPUT
-    filters:
-      - delayed_on: 5ms
-      - delayed_off: 5ms
-
-  - platform: gpio
-    name: "GPIO46 (UART_TX_ALT)"
-    id: gpio46_sensor
-    pin:
-      number: GPIO46
-      mode: INPUT
-    filters:
-      - delayed_on: 5ms
-      - delayed_off: 5ms
-
 text_sensor:
   - platform: wifi_info
     ip_address:
