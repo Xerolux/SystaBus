@@ -92,12 +92,7 @@ uart:
             id(parse_error_counter).publish_state(parse_errors);
           };
 
-          if (bytes.size() < 4) {
-            if (bytes.size() > 0) {
-              ESP_LOGW("systabus", "Frame too short: %u bytes (need 39)", bytes.size());
-            }
-            return;
-          }
+          if (bytes.size() < 4) return;
 
           if (bytes[0] == 0xFC && bytes[1] == 0x24 && bytes.size() < 39) {
             publish_parse_error();

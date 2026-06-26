@@ -66,11 +66,22 @@ interval:
   - interval: 500ms
     then:
       - lambda: |-
-          // Scanne GPIO16/17 (UART) und andere interessante Pins
-          static uint32_t last_pin_state[46] = {0};
+          // Initialize pins on first run (skip USB pins 19/20)
+          static uint32_t last_pin_state[GPIO_NUM_MAX] = {0};
+          static bool initialized = false;
 
           int pins_to_check[] = {1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
                                   16, 17, 18, 19, 20, 21, 39, 40, 41, 42, 44, 45};
+
+          if (!initialized) {
+            for (int pin : pins_to_check) {
+              // Skip USB D-/D+ pins (19, 20) to avoid disrupting USB CDC/JTAG
+              if (pin == 19 || pin == 20) continue;
+              gpio_set_direction((gpio_num_t)pin, GPIO_MODE_INPUT);
+            }
+            ESP_LOGI("gpio_scanner", "GPIO initialization complete (skipped pins 19/20)");
+            initialized = true;
+          }
 
           for (int pin : pins_to_check) {
             uint32_t level = gpio_get_level((gpio_num_t)pin);
