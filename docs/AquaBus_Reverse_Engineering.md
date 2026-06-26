@@ -230,15 +230,15 @@ Offset ist nullbasiert, also `frame[0] = 0xFC`.
 | 19 | 1 | 05 | Minute, BCD/hex-dezimal | bestätigt |
 | 20 | 1 | 18 | Tag, BCD/hex-dezimal | bestätigt |
 | 21 | 1 | 06 | Monat, BCD/hex-dezimal | bestätigt |
-| 22-23 | 2 | 00 00 | Zähler/Reserve, evtl. Fehlzirkulation | offen |
+| 22-23 | 2 | 00 00 | Zähler/Reserve oder Fehlzirkulation | analyse |
 | 24-27 | 4 | 00 00 00 03 | Tagesenergie in kWh | bestätigt |
 | 28-31 | 4 | 00 00 1F 4D | Gesamtenergie in kWh | bestätigt |
-| 32 | 1 | 29 | unbekannt | offen |
-| 33 | 1 | 00 | unbekannt / Jahr? | offen |
-| 34 | 1 | 00 / 80 | Taste/Flags? | offen |
-| 35 | 1 | 00 | Diagnose Korr? | offen |
-| 36 | 1 | 00 / 11 | Diagnose Merkmale 1? | offen |
-| 37 | 1 | 00 | Diagnose Merkmale 2? | offen |
+| 32 | 1 | 29 | Firmware-/Hardware-Version | analyse |
+| 33 | 1 | 00 | Firmware Sub-Version / Variante | analyse |
+| 34 | 1 | 00 / 80 | Tastenflags / Bedienfeld-Status | analyse |
+| 35 | 1 | 00 | Diagnose-Status 1 | analyse |
+| 36 | 1 | 00 / 11 | Diagnose-Status 2 / Fehlerspeicher | analyse |
+| 37 | 1 | 00 | Fehlerspeicher oder Reserve | analyse |
 | 38 | 1 | C4 | Checksumme | bestätigt |
 
 ---
@@ -545,22 +545,108 @@ Gegenmaßnahmen:
 
 ---
 
-## 16. Offene Punkte
+## 16. Telemetrie-Analyse: Bytes 22-23 und 32-37
 
-Aktuell offen:
+Analyse von 35 aufeinanderfolgenden FC24-Frames (2026-06-25, Status 8, PSO 0%):
 
-1. Bedeutung von `frame[22..23]`.
-2. Bedeutung von `frame[32..37]`.
-3. Ob Volumenstrom irgendwo im Busframe übertragen wird.
-4. Sicherer minimaler SET-Befehl statt großem Parameterblock.
-5. ESP32-S3 Pinbelegung auf Adapter final testen.
-6. Verhalten von ULV mit real aktivem Umlenkventil.
-7. Langzeittest ohne Raw-Frame und mit ESP32-S3.
-8. Optional: eigener ESPHome-External-Component Decoder statt `uart.debug`-Lambda.
+### Byte22–23: Reserve / dynamischer Zähler
+
+**Befund**: Über alle 35 Frames konsistent `00 00`.
+
+**Interpretation**:
+- Derzeit keine Aktivität unter Status 8 (Kollektortemperatur zu niedrig)
+- Wahrscheinlich: Reserve oder Zähler für andere Betriebsmodi
+- Hypothese: Aktiviert unter Status 3 (solare Wärme einspeisen) oder bei Fehlerfall
+
+**Mögliche Bedeutungen**:
+1. Fehlzirkulationserkennung (Status inaktiv)
+2. Schaltzähler der Heizleitung / ULV
+3. Reserve für zukünftige Erweiterungen
+4. Status-Reserve für andere Firmware-Versionen
+
+**Aktivierungsbedingung nicht bekannt.** Langzeit-Messung unter Status 3 empfohlen.
+
+### Bytes 32–37: Geräte-ID und Status
+
+**Befund**: Über alle 35 Frames konsistent `29 00 00 00 00 00`.
+
+#### Byte 32: Firmware-/Hardware-Version
+
+- Dezimal: **41** (konstant)
+- Hexadezimal: **0x29** (konstant)
+- Konsistent über alle Messungen → **Geräte-Identifikation**
+
+**Hypothese**: 
+```
+Byte 32 = Firmware-Hauptversion (0x29 ≈ v41 oder v3.x)
+Byte 33 = Firmware-Subversion oder Variante
+```
+
+Vergleich mit bekannter Firmware "V3.00 060613" → Byte32 könnte Komponenten-Version sein.
+
+#### Bytes 33–37: Status und Diagnose
+
+In der Messserie alle `00 00 00 00 00` → Status inaktiv unter Status 8.
+
+**Hypothese**:
+```
+Byte 33: Sub-Version oder Konfigurationsmerkmale
+Byte 34: Tastenflags / Bedienfeld-Status (00 = alle aus)
+Byte 35: Diagnose-Status 1
+Byte 36: Diagnose-Status 2 / Fehlerspeicher Bit
+Byte 37: Fehlerspeicher oder Reserve
+```
+
+**Erwartet unter anderen Bedingungen**:
+- Status 3 (solare Wärme einspeisen) → Byte34-37 ändern sich
+- PSO > 0% → Byte35 oder Byte36 aktiviert
+- ULV aktiv → Byte36 oder Byte37 setzen sich
+- Fehler / Störcode != 0 → Byte36-37 ändern sich
+
+### Empfohlene Dekodierungs-Schritte
+
+1. **Messungen unter Status 3** durchführen (solare Wärme einspeisen, PSO > 0%)
+2. **ULV-Verhalten** beobachten, falls Umlenkventil aktiv
+3. **Fehlerfall-Dokumentation** sammeln (Störcode != 0)
+4. **Hardware-Vergleich** durchführen (mehrere Geräte mit unterschiedlicher Firmware)
+5. **Bit-Level-Analyse** bei erweiterten Datenmengen
+
+### C++ Pseudo-Code für zukünftige Verarbeitung
+
+```cpp
+// Geräte-Identifikation
+uint8_t fw_version = frame[32];      // z.B. 0x29
+uint8_t fw_revision = frame[33];     // z.B. 0x00
+
+// Status und Diagnose (dynamisch)
+uint8_t control_bits = frame[34];    // Tastenflags / Bedienfeld
+uint8_t diag_status_1 = frame[35];   // Diagnose 1
+uint8_t diag_status_2 = frame[36];   // Diagnose 2 / Fehler
+uint8_t diag_status_3 = frame[37];   // Reserve / Fehler
+
+// Reserve / Zähler
+uint16_t counter_or_reserve = ((uint16_t)frame[22] << 8) | frame[23];
+```
 
 ---
 
-## 17. Haftungsausschluss
+## 17. Offene Punkte
+
+Aktuell offen:
+
+1. **Byte22–23 unter Status 3**: Aktivierung und Bedeutung unter solaraktivem Betrieb
+2. **Bytes34–37 unter Status 3**: Status-Änderungen bei PSO > 0%
+3. **ULV-Verhalten**: Auswirkung auf Byte22-23 oder Bytes34-37
+4. **Fehlerspeicher**: Bytes36-37 unter Störcode != 0
+5. Ob Volumenstrom irgendwo im Busframe übertragen wird.
+6. Sicherer minimaler SET-Befehl statt großem Parameterblock.
+7. ESP32-S3 Pinbelegung auf Adapter final testen.
+8. Langzeittest ohne Raw-Frame und mit ESP32-S3.
+9. Optional: eigener ESPHome-External-Component Decoder statt `uart.debug`-Lambda.
+
+---
+
+## 18. Haftungsausschluss
 
 Diese Dokumentation ist ein Reverse-Engineering-Arbeitsstand.
 
