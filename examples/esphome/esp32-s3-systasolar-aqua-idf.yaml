@@ -22,7 +22,7 @@ esp32:
       CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
 
 logger:
-  level: WARN
+  level: DEBUG
   baud_rate: 0
 
 api:
@@ -71,13 +71,33 @@ uart:
       - lambda: |-
           static uint32_t parse_errors = 0;
           static uint32_t frame_count = 0;
+          static uint32_t total_bytes_received = 0;
+
+          total_bytes_received += bytes.size();
+
+          // Log ALL incoming data for debugging
+          if (bytes.size() > 0) {
+            std::string hex_str;
+            for (uint8_t b : bytes) {
+              char buf[4];
+              snprintf(buf, sizeof(buf), "%02X ", b);
+              hex_str += buf;
+            }
+            ESP_LOGD("systabus", "RX[%u bytes]: %s | Total: %u bytes",
+              bytes.size(), hex_str.c_str(), total_bytes_received);
+          }
 
           auto publish_parse_error = [&]() {
             parse_errors++;
             id(parse_error_counter).publish_state(parse_errors);
           };
 
-          if (bytes.size() < 4) return;
+          if (bytes.size() < 4) {
+            if (bytes.size() > 0) {
+              ESP_LOGW("systabus", "Frame too short: %u bytes (need 39)", bytes.size());
+            }
+            return;
+          }
 
           if (bytes[0] == 0xFC && bytes[1] == 0x24 && bytes.size() < 39) {
             publish_parse_error();
@@ -400,6 +420,47 @@ binary_sensor:
     name: "Solar Aktiv"
     id: solar_aktiv_sensor
     device_class: running
+
+  # ===== PIN SCANNER (DEBUG) =====
+  - platform: gpio
+    name: "GPIO16 (RX) Activity"
+    id: gpio16_rx_sensor
+    pin:
+      number: GPIO16
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  - platform: gpio
+    name: "GPIO17 (TX) Activity"
+    id: gpio17_tx_sensor
+    pin:
+      number: GPIO17
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  - platform: gpio
+    name: "GPIO9 (UART_RX_ALT)"
+    id: gpio9_sensor
+    pin:
+      number: GPIO9
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
+
+  - platform: gpio
+    name: "GPIO46 (UART_TX_ALT)"
+    id: gpio46_sensor
+    pin:
+      number: GPIO46
+      mode: INPUT
+    filters:
+      - delayed_on: 5ms
+      - delayed_off: 5ms
 
 text_sensor:
   - platform: wifi_info
