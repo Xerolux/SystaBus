@@ -20,8 +20,8 @@ Community-Dokumentation für Paradigma SystaSolar Aqua am SystaBus. Arbeitsstand
 
 ### Offen
 
-- Bedeutung von `frame[22..23]`.
-- Bedeutung von `frame[32..37]`.
+- Bedeutung von `frame[22..23]` (bleibt unter Status 3/PSO 100% konstant `00 00`, Auslöser unbekannt).
+- Bedeutung von `frame[32..37]` (Byte32 `0x29` ist vermutlich statische Geräte-/Firmware-Kennung, Bytes33-37 bleiben auch unter Solarbetrieb `00 00`).
 - Ob der Volumenstrom irgendwo im Bus übertragen wird oder nur als Reglerparameter existiert.
 - Minimaler sicherer SET-Befehl statt großem Parameterblock.
 - Saubere ESP32-S3 Pinbelegung auf der vorhandenen Adapterplatine final testen.
@@ -603,9 +603,23 @@ Byte 37: Fehlerspeicher oder Reserve
 - ULV aktiv → Byte36 oder Byte37 setzen sich
 - Fehler / Störcode != 0 → Byte36-37 ändern sich
 
+### Messung unter Status 3, PSO 100% (2026-06-27)
+
+Live-Messung über ca. 90 Sekunden mit aktivem Solarbetrieb (Status 3, PSO 100 %, TSA steigt von 64.0 °C auf 64.5 °C, TSE von 54.6 °C auf 55.6 °C):
+
+```text
+FC 24 0B 01 02 80 02 22 02 74 FE E0 64 00 03 00 00 00 13 23 27 06 00 00 00 00 00 09 00 00 1F D1 29 00 00 00 00 00 EE
+...
+FC 24 0B 01 02 85 02 2C 02 75 FE E0 64 00 03 00 00 00 13 24 27 06 00 00 00 00 00 09 00 00 1F D1 29 00 00 00 00 00 DD
+```
+
+**Ergebnis**: Byte22-23 bleibt durchgehend `00 00`, Bytes32-37 bleiben durchgehend `29 00 00 00 00 00`. Auch bei aktivem Solarbetrieb mit voller Pumpenleistung (PSO 100 %) und kontinuierlich steigenden Temperaturen ändern sich diese Bytes nicht.
+
+**Schlussfolgerung**: Die Hypothese "Aktivierung unter Status 3" ist widerlegt. Byte22-23 und Bytes32-37 hängen nicht direkt an Status 3 oder PSO. Bytes32-37 sind damit eher als statische Geräte-/Firmware-Kennung zu verstehen (Byte32 `0x29` konstant über alle bisherigen Messungen, unabhängig vom Betriebszustand). Für Byte22-23 bleiben als Auslöser nur noch ULV-Aktivierung oder ein realer Störfall (Störcode != 0) übrig.
+
 ### Empfohlene Dekodierungs-Schritte
 
-1. **Messungen unter Status 3** durchführen (solare Wärme einspeisen, PSO > 0%)
+1. ~~Messungen unter Status 3 durchführen~~ – erledigt, keine Änderung beobachtet
 2. **ULV-Verhalten** beobachten, falls Umlenkventil aktiv
 3. **Fehlerfall-Dokumentation** sammeln (Störcode != 0)
 4. **Hardware-Vergleich** durchführen (mehrere Geräte mit unterschiedlicher Firmware)
@@ -634,10 +648,10 @@ uint16_t counter_or_reserve = ((uint16_t)frame[22] << 8) | frame[23];
 
 Aktuell offen:
 
-1. **Byte22–23 unter Status 3**: Aktivierung und Bedeutung unter solaraktivem Betrieb
-2. **Bytes34–37 unter Status 3**: Status-Änderungen bei PSO > 0%
-3. **ULV-Verhalten**: Auswirkung auf Byte22-23 oder Bytes34-37
-4. **Fehlerspeicher**: Bytes36-37 unter Störcode != 0
+1. ~~Byte22–23 unter Status 3~~: widerlegt, bleibt unter Status 3/PSO 100% konstant `00 00` (siehe Messung 2026-06-27)
+2. ~~Bytes32–37 unter Status 3~~: widerlegt, bleiben unter Status 3/PSO 100% konstant `29 00 00 00 00 00`
+3. **ULV-Verhalten**: Auswirkung auf Byte22-23 oder Bytes34-37, noch nicht getestet (ULV bisher immer `0`)
+4. **Fehlerspeicher**: Bytes36-37 unter Störcode != 0, noch nicht getestet
 5. Ob Volumenstrom irgendwo im Busframe übertragen wird.
 6. Sicherer minimaler SET-Befehl statt großem Parameterblock.
 7. ESP32-S3 Pinbelegung auf Adapter final testen.
