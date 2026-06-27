@@ -22,7 +22,7 @@ esp32:
       CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
 
 logger:
-  level: WARN
+  level: INFO
   baud_rate: 0
 
 api:
@@ -53,11 +53,11 @@ time:
   - platform: homeassistant
     id: ha_time
 
-# Hardware-UART: GPIO16=RX, GPIO17=TX
+# Hardware-UART: GPIO13=TX, GPIO11=RX (corrected from GPIO16/17)
 uart:
   id: uart_bus
-  tx_pin: GPIO17
-  rx_pin: GPIO16
+  tx_pin: GPIO13
+  rx_pin: GPIO11
   baud_rate: 9600
   data_bits: 8
   parity: NONE
@@ -71,6 +71,9 @@ uart:
       - lambda: |-
           static uint32_t parse_errors = 0;
           static uint32_t frame_count = 0;
+          static uint32_t total_bytes_received = 0;
+
+          total_bytes_received += bytes.size();
 
           auto publish_parse_error = [&]() {
             parse_errors++;
@@ -194,11 +197,29 @@ uart:
             snprintf(update_buf, sizeof(update_buf), "Reglerzeit %s", zeit_buf);
           }
 
+          // ===== ROHFRAME ALS HEX (für Phase-2-Analyse) =====
+          // Wird nur bei Solarbetrieb/ULV/Stoerung publiziert, um die offenen Bytes
+          // 22-23 und 34-37 unter genau den Bedingungen einzufangen, unter denen sie
+          // sich laut bisheriger Analyse aendern koennten.
+          bool capture_raw = (status_solar == 3 && pso > 0) || ulv != 0 || stoercode != 0;
+          static std::string last_raw_hex = "";
+          if (capture_raw) {
+            char raw_buf[120];
+            int pos = 0;
+            for (size_t j = 0; j < frame.size() && pos < (int)sizeof(raw_buf) - 3; j++) {
+              pos += snprintf(raw_buf + pos, sizeof(raw_buf) - pos, "%02X ", frame[j]);
+            }
+            if (std::string(raw_buf) != last_raw_hex) {
+              id(raw_frame_solar_sensor).publish_state(raw_buf);
+              last_raw_hex = raw_buf;
+            }
+          }
+
           // ===== STATE CHANGE DETECTION =====
           static float last_tsa = NAN, last_tse = NAN, last_twu = NAN, last_tw2 = NAN, last_power = NAN;
           static uint8_t last_pso = 255, last_ulv = 255, last_status = 255, last_stoer = 255,
-                         last_frost = 255, last_ctr = 255, last_byte34 = 255, last_byte35 = 255,
-                         last_byte36 = 255, last_byte37 = 255;
+                         last_frost = 255, last_ctr = 255, last_byte32 = 255, last_byte33 = 255,
+                         last_byte34 = 255, last_byte35 = 255, last_byte36 = 255, last_byte37 = 255;
           static uint16_t last_byte22_23 = 0xFFFF;
           static uint32_t last_tag = 0xFFFFFFFF, last_gesamt = 0xFFFFFFFF;
           static bool last_solar_active = false;
@@ -240,6 +261,8 @@ uart:
 
           // ===== UNKNOWN BYTES (PHASE 2) =====
           if (byte22_23 != last_byte22_23) { id(byte22_23_sensor).publish_state(byte22_23); last_byte22_23 = byte22_23; }
+          if (byte32_fw != last_byte32) { id(byte32_fw_sensor).publish_state(byte32_fw); last_byte32 = byte32_fw; }
+          if (byte33_variant != last_byte33) { id(byte33_variant_sensor).publish_state(byte33_variant); last_byte33 = byte33_variant; }
           if (byte34_control != last_byte34) { id(byte34_control_sensor).publish_state(byte34_control); last_byte34 = byte34_control; }
           if (byte35_diag1 != last_byte35) { id(byte35_diag1_sensor).publish_state(byte35_diag1); last_byte35 = byte35_diag1; }
           if (byte36_diag2 != last_byte36) { id(byte36_diag2_sensor).publish_state(byte36_diag2); last_byte36 = byte36_diag2; }
@@ -252,6 +275,11 @@ uart:
           if (stoer_text != last_stoer_text) { id(stoer_text_sensor).publish_state(stoer_text); last_stoer_text = stoer_text; }
           if (std::string(zeit_buf) != last_zeit) { id(regler_zeit_sensor).publish_state(zeit_buf); last_zeit = zeit_buf; }
           if (std::string(update_buf) != last_update) { id(last_update_sensor).publish_state(update_buf); last_update = update_buf; }
+
+          char display_buf[80];
+          snprintf(display_buf, sizeof(display_buf), "%s | PSO:%u%% ULV:%u | TSA:%.1f°C TSE:%.1f°C",
+            status_text.c_str(), pso, ulv, tsa, tse);
+          id(display_text_sensor).publish_state(display_buf);
 
           // ===== LOGGING EVERY 60 FRAMES =====
           if (frame_count % 60 == 0) {
@@ -360,6 +388,18 @@ sensor:
     icon: "mdi:counter"
 
   - platform: template
+    name: "Byte32 Firmware-Version"
+    id: byte32_fw_sensor
+    accuracy_decimals: 0
+    icon: "mdi:chip"
+
+  - platform: template
+    name: "Byte33 Variante"
+    id: byte33_variant_sensor
+    accuracy_decimals: 0
+    icon: "mdi:chip"
+
+  - platform: template
     name: "Byte34 Control"
     id: byte34_control_sensor
     accuracy_decimals: 0
@@ -427,6 +467,15 @@ text_sensor:
   - platform: template
     name: "Last Successful Update"
     id: last_update_sensor
+
+  - platform: template
+    name: "Display Text"
+    id: display_text_sensor
+
+  - platform: template
+    name: "Raw Frame Solar/ULV/Stoerung"
+    id: raw_frame_solar_sensor
+    icon: "mdi:hexadecimal"
 
 button:
   - platform: restart
