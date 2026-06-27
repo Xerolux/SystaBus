@@ -1,0 +1,104 @@
+# SystaBus ESP32-S3 PIN SCANNER
+# Loggt GPIO-Aktivität direkt (keine Sensoren)
+# Framework: ESP-IDF 6.0.1 | IP: 192.168.180.78
+
+substitutions:
+  device_name: "systasolar-pin-scanner"
+  device_friendly_name: "SystaSolar Pin Scanner"
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${device_friendly_name}
+  on_boot:
+    - priority: -100
+      then:
+        - logger.log:
+            format: "===== GPIO PIN SCANNER STARTED ====="
+            level: INFO
+
+esp32:
+  board: lolin_s3_mini
+  variant: esp32s3
+  framework:
+    type: esp-idf
+    version: "6.0.1"
+    sdkconfig_options:
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240: y
+      CONFIG_FREERTOS_USE_TICKLESS_IDLE: y
+
+logger:
+  level: DEBUG
+  baud_rate: 0
+  logs:
+    gpio: DEBUG
+    esp32.gpio: DEBUG
+
+api:
+  reboot_timeout: 0s
+  encryption:
+    key: !secret api_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  reboot_timeout: 5min
+  manual_ip:
+    static_ip: 192.168.180.78
+    gateway: 192.168.180.1
+    subnet: 255.255.255.0
+    dns1: 192.168.180.1
+  ap:
+    ssid: ${device_friendly_name}-AP
+    password: !secret ap_password
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+# ===== GPIO ACTIVITY MONITOR (via Interval) =====
+interval:
+  - interval: 500ms
+    then:
+      - lambda: |-
+          // Initialize pins on first run (skip USB pins 19/20)
+          static uint32_t last_pin_state[GPIO_NUM_MAX] = {0};
+          static bool initialized = false;
+
+          int pins_to_check[] = {1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+                                  16, 17, 18, 19, 20, 21, 39, 40, 41, 42, 44, 45};
+
+          if (!initialized) {
+            for (int pin : pins_to_check) {
+              // Skip USB D-/D+ pins (19, 20) to avoid disrupting USB CDC/JTAG
+              if (pin == 19 || pin == 20) continue;
+              gpio_set_direction((gpio_num_t)pin, GPIO_MODE_INPUT);
+            }
+            ESP_LOGI("gpio_scanner", "GPIO initialization complete (skipped pins 19/20)");
+            initialized = true;
+          }
+
+          for (int pin : pins_to_check) {
+            uint32_t level = gpio_get_level((gpio_num_t)pin);
+            if (last_pin_state[pin] != level) {
+              last_pin_state[pin] = level;
+              ESP_LOGI("gpio_scanner", "GPIO%d -> %u", pin, level);
+            }
+          }
+
+# Nur für Monitoring: minimal
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      name: "IP Adresse"
+    ssid:
+      name: "WLAN"
+
+button:
+  - platform: restart
+    name: "Neustart"
