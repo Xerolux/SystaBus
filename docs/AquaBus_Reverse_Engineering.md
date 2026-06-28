@@ -617,9 +617,18 @@ FC 24 0B 01 02 85 02 2C 02 75 FE E0 64 00 03 00 00 00 13 24 27 06 00 00 00 00 00
 
 **Schlussfolgerung**: Die Hypothese "Aktivierung unter Status 3" ist widerlegt. Byte22-23 und Bytes32-37 hängen nicht direkt an Status 3 oder PSO. Bytes32-37 sind damit eher als statische Geräte-/Firmware-Kennung zu verstehen (Byte32 `0x29` konstant über alle bisherigen Messungen, unabhängig vom Betriebszustand). Für Byte22-23 bleiben als Auslöser nur noch ULV-Aktivierung oder ein realer Störfall (Störcode != 0) übrig.
 
+### Langzeitmessung (2026-06-27 bis 2026-06-28, ca. 19 Stunden)
+
+Auswertung von 2480 erfassten `raw_frame_solar_ulv_stoerung`-Frames (Home-Assistant-Historie, Capture-Bedingung weiterhin `(status_solar == 3 && pso > 0) || ulv != 0 || stoercode != 0`) über einen Zeitraum von ca. 19 Stunden, mit stark wechselnden TSA/TSE/PSO-Werten (PSO u. a. zwischen 0x32 und 0x85 beobachtet):
+
+- Byte22-23: über alle 2480 Frames durchgehend `00 00`
+- Bytes32-37: über alle 2480 Frames durchgehend `29 00 00 00 00 00`
+
+**Schlussfolgerung**: Auch über einen Langzeitraum mit vielfach wechselnden Betriebszuständen (Solarbetrieb mit unterschiedlicher Pumpenleistung) bleiben beide Bytebereiche absolut konstant. Damit ist endgültig bestätigt, dass Byte22-23 und Bytes32-37 nicht an PSO, TSA/TSE oder den normalen Solarbetrieb (Status 3) gekoppelt sind. In diesem Beobachtungszeitraum trat weder eine aktive ULV-Schaltung noch ein Störfall (Störcode != 0) auf – die einzigen verbleibenden Hypothesen (ULV-Aktivierung, realer Störfall) konnten somit noch nicht verifiziert werden, da die entsprechenden Trigger-Bedingungen während der Messung nicht eintraten.
+
 ### Empfohlene Dekodierungs-Schritte
 
-1. ~~Messungen unter Status 3 durchführen~~ – erledigt, keine Änderung beobachtet
+1. ~~Messungen unter Status 3 durchführen~~ – erledigt, keine Änderung beobachtet (auch über 19h Langzeitmessung bestätigt)
 2. **ULV-Verhalten** beobachten, falls Umlenkventil aktiv
 3. **Fehlerfall-Dokumentation** sammeln (Störcode != 0)
 4. **Hardware-Vergleich** durchführen (mehrere Geräte mit unterschiedlicher Firmware)
